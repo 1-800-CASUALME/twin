@@ -493,7 +493,7 @@ impl App {
                 Msg::Ev(ev) => match ev {
                     Event::Peer { name, host, os, addr, port, instance } => {
                         if !self.peers.iter().any(|p| p.instance == instance) {
-                            self.peers.push(Found { name, host, os, user: String::new(), home: String::new(), addr, port, instance });
+                            self.peers.push(Found { name, host, os, user: String::new(), home: String::new(), addr, port, instance, fp: String::new() });
                         }
                     }
                     Event::Code { code } => self.code = Some(code),

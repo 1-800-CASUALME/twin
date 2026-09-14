@@ -8,6 +8,13 @@ pub struct Identity {
     pub public_key: String,
 }
 
+/// Short stable fingerprint of this machine's Twin key (used to recognise a peer across
+/// hostname and IP changes).
+pub fn fingerprint(public_key: &str) -> String {
+    use sha2::{Digest, Sha256};
+    hex::encode(&Sha256::digest(public_key.trim().as_bytes())[..6])
+}
+
 pub fn ensure() -> Result<Identity> {
     ensure_in(crate::paths::identity_dir())
 }

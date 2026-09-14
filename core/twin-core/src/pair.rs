@@ -47,6 +47,7 @@ fn finish(their: &LocalInfo, their_key: &str, addr: &str) -> Result<PeerConfig> 
         home: their.home.clone(),
         addr: addr.to_string(),
         hub: their.os == "linux",
+        fp: identity::fingerprint(their_key),
     };
     let mut cfg = Config::load()?;
     cfg.peer = Some(pc.clone());

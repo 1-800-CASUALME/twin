@@ -15,6 +15,8 @@ pub struct LocalInfo {
     pub user: String,
     pub home: String,
     pub instance: String,
+    #[serde(default)]
+    pub fp: String,
 }
 
 pub fn local_info() -> LocalInfo {
@@ -23,7 +25,8 @@ pub fn local_info() -> LocalInfo {
     let user = std::env::var("USER").unwrap_or_else(|_| "user".into());
     let home = crate::paths::home().to_string_lossy().into_owned();
     let instance = format!("{}-{}", host, std::process::id());
-    LocalInfo { name: host.clone(), host, os: std::env::consts::OS.to_string(), user, home, instance }
+    let fp = crate::identity::ensure().map(|i| crate::identity::fingerprint(&i.public_key)).unwrap_or_default();
+    LocalInfo { name: host.clone(), host, os: std::env::consts::OS.to_string(), user, home, instance, fp }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -36,6 +39,8 @@ pub struct Found {
     pub addr: String,
     pub port: u16,
     pub instance: String,
+    #[serde(default)]
+    pub fp: String,
 }
 
 pub struct Advertiser {
@@ -61,7 +66,9 @@ pub fn advertise(port: u16, info: &LocalInfo) -> Result<Advertiser> {
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
     .collect();
-    let hostname = format!("{}.local.", info.host);
+    // A Twin-specific mDNS host name. Advertising under the machine's own name makes macOS
+    // think another device has its name and rename itself ("MacBook-2", "MacBook-3", ...).
+    let hostname = format!("twin-{}.local.", if info.fp.is_empty() { info.instance.clone() } else { info.fp.clone() });
     let svc = ServiceInfo::new(SERVICE, &info.instance, &hostname, "", port, props)?.enable_addr_auto();
     let fullname = svc.get_fullname().to_string();
     daemon.register(svc)?;
@@ -79,8 +86,8 @@ pub fn browse(timeout: Duration, emitter: &dyn Emitter) -> Result<Vec<Found>> {
         match rx.recv_timeout(remaining) {
             Ok(ServiceEvent::ServiceResolved(info)) => {
                 let get = |k: &str| info.get_property_val_str(k).unwrap_or("").to_string();
-                // Skip ourselves: same instance, or another twin process on this same host.
-                if get("instance") == me.instance || get("host") == me.host {
+                // Skip ourselves: same instance, same key, or another twin process on this host.
+                if get("instance") == me.instance || (!me.fp.is_empty() && get("fp") == me.fp) || get("host") == me.host {
                     continue;
                 }
                 let addrs = info.get_addresses();
@@ -102,6 +109,7 @@ pub fn browse(timeout: Duration, emitter: &dyn Emitter) -> Result<Vec<Found>> {
                     addr,
                     port: info.get_port(),
                     instance: get("instance"),
+                    fp: get("fp"),
                 };
                 emitter.emit(Event::Peer {
                     name: f.name.clone(),

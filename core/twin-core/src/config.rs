@@ -12,6 +12,9 @@ pub struct PeerConfig {
     pub addr: String,
     /// true if the peer is the hub that hosts bare repos and atuin-server
     pub hub: bool,
+    /// fingerprint of the peer's Twin key; stable across hostname and IP changes
+    #[serde(default)]
+    pub fp: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]

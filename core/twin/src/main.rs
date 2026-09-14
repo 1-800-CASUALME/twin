@@ -178,6 +178,7 @@ fn real_main(em: &dyn Emitter) -> Result<()> {
                     addr: a,
                     port,
                     instance: String::new(),
+                    fp: String::new(),
                 },
                 (inst, None) => {
                     let peers = discover::browse(Duration::from_secs(4), em)?;

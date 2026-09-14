@@ -141,12 +141,15 @@ impl Peer {
     pub fn refresh_addr(cfg: &mut Config) -> Option<String> {
         let p = cfg.peer.as_ref()?;
         let host = p.host.clone();
+        let fp = p.fp.clone();
         let current = p.addr.clone();
         let found = crate::discover::browse(std::time::Duration::from_millis(1500), &crate::event::NullEmitter).ok()?;
-        let hit = found.into_iter().find(|f| f.host == host)?;
-        if hit.addr != current {
+        let hit = found.into_iter().find(|f| (!fp.is_empty() && f.fp == fp) || (fp.is_empty() && f.host == host))?;
+        if hit.addr != current || hit.host != host {
             if let Some(pc) = cfg.peer.as_mut() {
                 pc.addr = hit.addr.clone();
+                pc.host = hit.host.clone();
+                pc.name = hit.name.clone();
             }
             let _ = cfg.save();
             let _ = sync_peer_block(cfg);
