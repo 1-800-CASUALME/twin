@@ -9,14 +9,22 @@ on Omarchy.
 
 ## Install
 
-macOS:
+macOS (recommended, avoids the Gatekeeper warning):
+
+```
+curl -fsSL https://raw.githubusercontent.com/1-800-CASUALME/twin/main/install-mac.sh | bash
+```
+
+Or with Homebrew:
 
 ```
 brew tap 1-800-CASUALME/twin https://github.com/1-800-CASUALME/twin
-brew install --cask twin
+brew install --cask --no-quarantine twin
 ```
 
-Or download `Twin-macos.dmg` from the latest release, drag Twin to Applications.
+Or download `Twin-macos.dmg` from the latest release and drag Twin onto Applications.
+The app is ad-hoc signed, not notarized, so macOS will say it "could not verify" it:
+right-click Twin.app, choose Open, and confirm once. The installer script clears that flag for you.
 Twin links the `twin` command into `~/.local/bin` on first launch.
 
 Omarchy / Arch:
@@ -82,8 +90,9 @@ docs/     design spec and implementation plans
 ## Release
 
 Tag `vX.Y.Z` and push. CI builds `twin-linux-{x86_64,aarch64}.tar.gz`, `Twin-macos.dmg`,
-and `Twin-macos.zip`, and attaches them to the GitHub release. The Mac build is ad-hoc
-signed; Gatekeeper asks once on first open (right-click, Open).
+and `Twin-macos.zip`, and attaches them to the GitHub release. The Mac build is ad-hoc signed, not notarized
+(that needs an Apple Developer account); `install-mac.sh` clears the quarantine flag so
+Gatekeeper does not block it.
 
 ## Develop
 
