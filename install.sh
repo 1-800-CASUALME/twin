@@ -77,6 +77,13 @@ fi
 say "Enabling sshd so the other machine can connect"
 run sudo systemctl enable --now sshd
 
+if command -v ufw >/dev/null 2>&1; then
+  say "Opening Twin's ports in ufw (pairing 7423, atuin 8888, Eternal Terminal 2022)"
+  for port in 7423 8888 2022; do run sudo ufw allow "$port/tcp"; done
+  # ufw's default "limit 22/tcp" rate-limits repeated SSH connections; Twin multiplexes
+  # one connection so it stays under that limit, no change needed here.
+fi
+
 case ":$PATH:" in *":$BIN:"*) ;; *) say "Note: add $BIN to your PATH (Omarchy does this by default)";; esac
 
 say "Done. Launch Twin from the app launcher, or run: twin-tui"

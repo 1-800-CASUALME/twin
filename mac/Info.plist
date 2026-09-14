@@ -9,7 +9,7 @@
     <key>CFBundleName</key><string>Twin</string>
     <key>CFBundleDisplayName</key><string>Twin</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1.2</string>
+    <key>CFBundleShortVersionString</key><string>0.1.3</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>CFBundleIconFile</key><string>Twin</string>
     <key>LSMinimumSystemVersion</key><string>15.0</string>

@@ -8,10 +8,38 @@ pub const ALIAS: &str = "twin-peer";
 const BEGIN: &str = "# BEGIN twin";
 const END: &str = "# END twin";
 
+/// One multiplexed SSH connection is reused for every command and rsync, which is faster and
+/// keeps Twin under connection rate limits such as Omarchy's `ufw limit 22`.
 pub fn peer_block(addr: &str, user: &str, identity_file: &str) -> String {
+    // Unix socket paths are capped at 104 bytes on macOS, so keep this short and outside $HOME.
+    let control = std::path::PathBuf::from(format!("/tmp/twin-{}-%C", std::env::var("USER").unwrap_or_else(|_| "u".into())));
     format!(
-        "{BEGIN}\nHost {ALIAS}\n    HostName {addr}\n    User {user}\n    IdentityFile {identity_file}\n    IdentitiesOnly yes\n    StrictHostKeyChecking accept-new\n    ServerAliveInterval 15\n{END}\n"
+        "{BEGIN}\nHost {ALIAS}\n    HostName {addr}\n    User {user}\n    IdentityFile {identity_file}\n    IdentitiesOnly yes\n    StrictHostKeyChecking accept-new\n    ServerAliveInterval 15\n    ControlMaster auto\n    ControlPath {}\n    ControlPersist 10m\n{END}\n",
+        control.display()
     )
+}
+
+/// Rewrite the alias from the saved config (idempotent), so upgrades pick up new options
+/// and address changes.
+pub fn sync_peer_block(cfg: &Config) -> Result<()> {
+    if let Some(p) = &cfg.peer {
+        std::fs::create_dir_all(crate::paths::state_dir())?;
+        write_peer_host(&p.addr, &p.user, identity_file_string().to_str().unwrap())?;
+    }
+    Ok(())
+}
+
+/// Turn a raw ssh/rsync failure into something a person can act on.
+pub fn friendly(err: &str, peer: &str, addr: &str) -> String {
+    if err.contains("Connection refused") {
+        format!("cannot connect to {peer} at {addr}: sshd is not running there, a firewall blocks port 22, or its address changed")
+    } else if err.contains("Permission denied") {
+        format!("{peer} rejected Twin's key: pair again")
+    } else if err.contains("timed out") || err.contains("Operation timed out") || err.contains("No route to host") {
+        format!("{peer} at {addr} is not answering: is it awake and on the same network?")
+    } else {
+        err.to_string()
+    }
 }
 
 pub fn write_peer_host(addr: &str, user: &str, identity_file: &str) -> Result<()> {
@@ -98,12 +126,32 @@ pub struct Peer {
     pub home: String,
     pub user: String,
     pub name: String,
+    pub addr: String,
 }
 
 impl Peer {
     pub fn new(cfg: &Config) -> Result<Peer> {
         let p = cfg.peer.as_ref().context("not paired yet: run `twin pair` first")?;
-        Ok(Peer { home: p.home.clone(), user: p.user.clone(), name: p.name.clone() })
+        let _ = sync_peer_block(cfg);
+        Ok(Peer { home: p.home.clone(), user: p.user.clone(), name: p.name.clone(), addr: p.addr.clone() })
+    }
+
+    /// If the peer's Twin daemon is visible on the LAN under a new address, update the
+    /// saved config and the ssh alias. Returns the address in use.
+    pub fn refresh_addr(cfg: &mut Config) -> Option<String> {
+        let p = cfg.peer.as_ref()?;
+        let host = p.host.clone();
+        let current = p.addr.clone();
+        let found = crate::discover::browse(std::time::Duration::from_millis(1500), &crate::event::NullEmitter).ok()?;
+        let hit = found.into_iter().find(|f| f.host == host)?;
+        if hit.addr != current {
+            if let Some(pc) = cfg.peer.as_mut() {
+                pc.addr = hit.addr.clone();
+            }
+            let _ = cfg.save();
+            let _ = sync_peer_block(cfg);
+        }
+        Some(hit.addr)
     }
 
     fn ssh_base_args() -> Vec<String> {
@@ -224,6 +272,7 @@ mod tests {
         assert!(s.contains("Host other"));
         assert!(s.contains("HostName 10.0.0.3"));
         assert!(!s.contains("10.0.0.2"));
+        assert!(s.contains("ControlMaster auto"));
     }
     #[test]
     fn authorize_key_appends_once() {
@@ -232,6 +281,10 @@ mod tests {
         authorize_key_in(&f, "ssh-ed25519 AAAA twin@mac").unwrap();
         authorize_key_in(&f, "ssh-ed25519 AAAA twin@mac").unwrap();
         assert_eq!(std::fs::read_to_string(&f).unwrap().lines().count(), 1);
+    }
+    #[test]
+    fn friendly_maps_refused() {
+        assert!(friendly("ssh: connect to host 1.2.3.4 port 22: Connection refused", "desk", "1.2.3.4").starts_with("cannot connect to desk at 1.2.3.4"));
     }
     #[test]
     fn shell_quote_escapes_single_quotes() {

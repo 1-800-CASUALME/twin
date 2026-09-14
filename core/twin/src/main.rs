@@ -197,7 +197,9 @@ fn real_main(em: &dyn Emitter) -> Result<()> {
                 diagnose::run_local(em);
             } else {
                 cmd::set_log(RunLog::start()?);
-                diagnose::run_all(&Config::load()?, em)?;
+                let mut cfg = Config::load()?;
+                Peer::refresh_addr(&mut cfg);
+                diagnose::run_all(&cfg, em)?;
             }
             em.emit(Event::Done { ok: true });
         }
@@ -220,10 +222,12 @@ fn real_main(em: &dyn Emitter) -> Result<()> {
         Cmd::Sync { items, all, member } => {
             let _lock = RunLock::acquire()?;
             cmd::set_log(RunLog::start()?);
-            let cfg = Config::load()?;
+            let mut cfg = Config::load()?;
+            Peer::refresh_addr(&mut cfg);
             let peer = Peer::new(&cfg)?;
             if !peer.reachable() {
-                anyhow::bail!("peer {} unreachable", peer.name);
+                let probe = peer.run(&["true"]).map(|o| o.stderr).unwrap_or_default();
+                anyhow::bail!("{}", twin_core::ssh::friendly(&probe, &peer.name, &peer.addr));
             }
             let ids: Vec<String> = if all || items.is_empty() {
                 if cfg.selection.is_empty() {
@@ -247,7 +251,7 @@ fn real_main(em: &dyn Emitter) -> Result<()> {
                     .collect();
                 if let Err(err) = e.sync(&cfg, &peer, &members, em) {
                     ok = false;
-                    em.emit(Event::Step { id: id.clone(), state: State::Fail, msg: format!("{err:#}") });
+                    em.emit(Event::Step { id: id.clone(), state: State::Fail, msg: twin_core::ssh::friendly(&format!("{err:#}"), &peer.name, &peer.addr) });
                 }
             }
             em.emit(Event::Done { ok });

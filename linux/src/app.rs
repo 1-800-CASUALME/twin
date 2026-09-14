@@ -220,7 +220,8 @@ impl App {
                 twin_core::cmd::set_log(l);
             }
             match Config::load() {
-                Ok(cfg) => {
+                Ok(mut cfg) => {
+                    Peer::refresh_addr(&mut cfg);
                     let _ = diagnose::run_all(&cfg, em);
                 }
                 Err(e) => em.emit(Event::Error { msg: e.to_string() }),
@@ -339,9 +340,11 @@ impl App {
                 cfg.members = members.clone();
                 cfg.git_autocommit = autocommit.clone();
                 cfg.save()?;
+                Peer::refresh_addr(&mut cfg);
                 let peer = Peer::new(&cfg)?;
                 if !peer.reachable() {
-                    anyhow::bail!("peer {} unreachable", peer.name);
+                    let probe = peer.run(&["true"]).map(|o| o.stderr).unwrap_or_default();
+                    anyhow::bail!("{}", twin_core::ssh::friendly(&probe, &peer.name, &peer.addr));
                 }
                 let mut ok = true;
                 for id in &ids {
@@ -349,7 +352,7 @@ impl App {
                     let mine: Vec<String> = members.iter().filter_map(|m| m.strip_prefix(&format!("{id}:")).map(String::from)).collect();
                     if let Err(err) = e.sync(&cfg, &peer, &mine, em) {
                         ok = false;
-                        em.emit(Event::Step { id: id.clone(), state: State::Fail, msg: format!("{err:#}") });
+                        em.emit(Event::Step { id: id.clone(), state: State::Fail, msg: twin_core::ssh::friendly(&format!("{err:#}"), &peer.name, &peer.addr) });
                     }
                 }
                 Ok(ok)
