@@ -25,9 +25,32 @@ fn main() -> Result<()> {
     res
 }
 
+/// Leave the TUI, run a command with the real terminal (so sudo and pacman can prompt), come back.
+fn run_interactive(terminal: &mut ratatui::DefaultTerminal, app: &mut App, argv: &[String]) -> Result<()> {
+    let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
+    ratatui::restore();
+    println!("\n  twin: running  {}\n", argv.join(" "));
+    let status = std::process::Command::new(&argv[0]).args(&argv[1..]).status();
+    let ok = status.as_ref().map(|s| s.success()).unwrap_or(false);
+    println!("\n  {}  press Enter to return to Twin", if ok { "done." } else { "that did not finish cleanly." });
+    let mut line = String::new();
+    let _ = std::io::stdin().read_line(&mut line);
+    *terminal = ratatui::init();
+    crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
+    if !ok {
+        app.error = Some(format!("{} failed", argv.join(" ")));
+    }
+    app.diagnose();
+    Ok(())
+}
+
 fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
     loop {
         app.pump();
+        if let Some(argv) = app.pending_fix.take() {
+            run_interactive(terminal, app, &argv)?;
+            continue;
+        }
         terminal.draw(|f| ui::draw(f, app))?;
         if app.quit {
             return Ok(());

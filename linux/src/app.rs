@@ -88,6 +88,7 @@ pub struct App {
     pub synced: bool,
     pub sync_ok: bool,
     pub schedule: bool,
+    pub pending_fix: Option<Vec<String>>,
     pub quit: bool,
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
@@ -119,6 +120,7 @@ impl App {
             synced: false,
             sync_ok: false,
             schedule: twin_core::schedule::is_on(),
+            pending_fix: None,
             quit: false,
             tx,
             rx,
@@ -226,29 +228,21 @@ impl App {
         });
     }
 
+    /// Queue the focused check's fix. The main loop runs it outside the TUI so sudo can prompt.
     pub fn fix_focused(&mut self) {
         let checks: Vec<CheckResult> = self.sorted_checks();
         let Some(c) = checks.get(self.focus).cloned() else { return };
-        if !c.fixable || c.side == "peer" {
+        if c.side == "peer" {
+            self.error = Some(format!("fix {} on the other machine, then press r to check again", c.name));
             return;
         }
-        if c.id == "ssh" {
-            self.spawn("fix", |em| {
-                let o = twin_core::cmd::run("sudo", &["-n", "systemctl", "enable", "--now", "sshd"], None);
-                let ok = o.map(|o| o.status == 0).unwrap_or(false);
-                em.emit(Event::Step {
-                    id: "ssh".into(),
-                    state: if ok { State::Ok } else { State::Fail },
-                    msg: if ok { "sshd enabled".into() } else { "run: sudo systemctl enable --now sshd".into() },
-                });
-            });
+        if !c.fixable {
             return;
         }
-        self.busy = true;
-        let id = c.id.clone();
-        self.spawn("fix", move |em| {
-            let _ = diagnose::fix(&id, em);
-        });
+        match diagnose::fix_command(&c.id) {
+            Some(argv) => self.pending_fix = Some(argv),
+            None => self.error = Some(c.msg.clone()),
+        }
     }
 
     pub fn sorted_checks(&self) -> Vec<CheckResult> {

@@ -84,14 +84,20 @@ pub fn run_local(emitter: &dyn Emitter) -> Vec<CheckResult> {
         let r = tool(id, side, ok, if ok { version_of(bin, flag) } else { String::new() });
         emit_push(&mut out, emitter, r);
     }
-    let sshd_ok = which("sshd") || std::path::Path::new("/usr/sbin/sshd").exists();
+    let listening = sshd_listening();
     emit_push(&mut out, emitter, CheckResult {
         id: "ssh".into(),
         name: "SSH".into(),
         side: side.into(),
-        state: if sshd_ok { State::Ok } else { State::Fail },
-        msg: if sshd_ok { "sshd available".into() } else { "sshd missing".into() },
-        fixable: !sshd_ok,
+        state: if listening { State::Ok } else { State::Fail },
+        msg: if listening {
+            "sshd listening on port 22".into()
+        } else if cfg!(target_os = "macos") {
+            "Remote Login is off: System Settings > General > Sharing > Remote Login".into()
+        } else {
+            "sshd not running: sudo systemctl enable --now sshd".into()
+        },
+        fixable: !listening,
     });
     let rs = crate::engines::terminal::resurrect_dir().is_some();
     emit_push(&mut out, emitter, CheckResult {
@@ -148,13 +154,20 @@ pub fn run_all(cfg: &Config, emitter: &dyn Emitter) -> Result<Vec<CheckResult>> 
     match crate::ssh::Peer::new(cfg) {
         Ok(peer) => {
             let reach = peer.reachable();
+            let peer_is_mac = cfg.peer.as_ref().map(|p| p.os == "macos").unwrap_or(false);
             emit_push(&mut all, emitter, CheckResult {
                 id: "ssh".into(),
                 name: "SSH".into(),
                 side: "pair".into(),
                 state: if reach { State::Ok } else { State::Fail },
-                msg: if reach { format!("connected to {}", peer.name) } else { "peer unreachable".into() },
-                fixable: !reach,
+                msg: if reach {
+                    format!("connected to {}", peer.name)
+                } else if peer_is_mac {
+                    format!("cannot reach {}: on the Mac turn on System Settings > General > Sharing > Remote Login, then check again", peer.name)
+                } else {
+                    format!("cannot reach {}: on it run  sudo systemctl enable --now sshd  and check again", peer.name)
+                },
+                fixable: false,
             });
             if reach {
                 match peer.twin_json::<Event>(&["diagnose", "--local"]) {
@@ -187,6 +200,28 @@ pub fn run_all(cfg: &Config, emitter: &dyn Emitter) -> Result<Vec<CheckResult>> 
         }),
     }
     Ok(all)
+}
+
+/// Is something accepting connections on port 22 of this machine?
+pub fn sshd_listening() -> bool {
+    use std::net::{SocketAddr, TcpStream};
+    let addr: SocketAddr = "127.0.0.1:22".parse().unwrap();
+    TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(800)).is_ok()
+}
+
+/// The command a terminal UI should run interactively (so sudo can prompt) to fix a check.
+/// None means the fix is not a command: on macOS the ssh fix is a System Settings pane.
+pub fn fix_command(id: &str) -> Option<Vec<String>> {
+    let sv = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    if id == "ssh" {
+        return if cfg!(target_os = "macos") { None } else { Some(sv(&["sudo", "systemctl", "enable", "--now", "sshd"])) };
+    }
+    let d = def(id)?;
+    if cfg!(target_os = "macos") {
+        d.brew.map(|pkg| sv(&["brew", "install", pkg]))
+    } else {
+        d.pacman.map(|pkg| sv(&["sudo", "pacman", "-S", "--needed", pkg]))
+    }
 }
 
 pub fn fix(id: &str, emitter: &dyn Emitter) -> Result<()> {
