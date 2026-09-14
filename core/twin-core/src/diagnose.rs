@@ -39,13 +39,16 @@ fn def(id: &str) -> Option<&'static CheckDef> {
     CHECKS.iter().find(|c| c.id == id)
 }
 
+/// Tools without which nothing can sync. Everything else is a warning, not a blocker.
+const REQUIRED: &[&str] = &["ssh", "rsync", "git"];
+
 fn tool(id: &str, side: &str, ok: bool, version: String) -> CheckResult {
     let d = def(id).unwrap();
     CheckResult {
         id: id.into(),
         name: d.name.into(),
         side: side.into(),
-        state: if ok { State::Ok } else { State::Fail },
+        state: if ok { State::Ok } else if REQUIRED.contains(&id) { State::Fail } else { State::Warn },
         msg: if ok { version } else { "not installed".into() },
         fixable: !ok && (d.brew.is_some() || d.pacman.is_some()),
     }

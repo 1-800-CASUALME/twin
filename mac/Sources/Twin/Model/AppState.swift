@@ -77,6 +77,11 @@ final class AppState {
         }
     }
 
+    func shutdown() {
+        daemonHandle?.terminate()
+        pairHandle?.terminate()
+    }
+
     func onLaunch() {
         TwinCore.ensureUserSymlink()
         Task { await loadStatus() }
@@ -111,7 +116,7 @@ final class AppState {
     /// Advertise this Mac so the other machine can find and pair with it.
     func startDaemon() {
         guard daemonHandle == nil else { return }
-        let (events, handle) = TwinCore.run(["daemon"])
+        let (events, handle) = TwinCore.run(["daemon", "--parent-pid", String(ProcessInfo.processInfo.processIdentifier)])
         daemonHandle = handle
         Task {
             for await ev in events {

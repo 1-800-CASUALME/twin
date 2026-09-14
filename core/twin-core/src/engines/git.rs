@@ -181,7 +181,7 @@ impl Engine for GitEngine {
                 let script = format!("mkdir -p {} && git clone -q {} {}", shell_quote(&parent), shell_quote(&url), shell_quote(&peer_repo));
                 let o = peer.sh(&script)?;
                 emitter.emit(Event::Step {
-                    id: sub,
+                    id: format!("{sub} @{}", peer.name),
                     state: if o.status == 0 { State::Ok } else { State::Warn },
                     msg: if o.status == 0 {
                         format!("cloned on {}", peer.name)
@@ -204,7 +204,7 @@ impl Engine for GitEngine {
                     } else {
                         State::Ok
                     };
-                    emitter.emit(Event::Step { id: sub, state: s, msg: format!("{}: {}", peer.name, o.msg) });
+                    emitter.emit(Event::Step { id: format!("{sub} @{}", peer.name), state: s, msg: o.msg.clone() });
                 }
             }
             emitter.emit(Event::Progress { id: id.into(), done: i as u64 + 1, total, bytes: 0 });

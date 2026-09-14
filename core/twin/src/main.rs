@@ -25,6 +25,9 @@ enum Cmd {
         port: u16,
         #[arg(long)]
         accept: bool,
+        /// Exit when this process id is gone (used by the apps so no daemon outlives them)
+        #[arg(long)]
+        parent_pid: Option<u32>,
     },
     /// Pair with a discovered machine
     Pair {
@@ -118,7 +121,16 @@ fn real_main(em: &dyn Emitter) -> Result<()> {
             discover::browse(Duration::from_secs(timeout), em)?;
             em.emit(Event::Done { ok: true });
         }
-        Cmd::Daemon { port, accept } => {
+        Cmd::Daemon { port, accept, parent_pid } => {
+            if let Some(pid) = parent_pid {
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(Duration::from_secs(2));
+                    let alive = std::process::Command::new("kill").args(["-0", &pid.to_string()]).output().map(|o| o.status.success()).unwrap_or(false);
+                    if !alive {
+                        std::process::exit(0);
+                    }
+                });
+            }
             let info = discover::local_info();
             let _adv = discover::advertise(port, &info)?;
             em.emit(Event::Step { id: "daemon".into(), state: State::Running, msg: format!("advertising {} on port {port}", info.host) });
