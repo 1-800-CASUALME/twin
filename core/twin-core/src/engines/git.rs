@@ -113,6 +113,9 @@ pub fn ensure_bare_on_hub(peer: &Peer, name: &str) -> Result<String> {
     if o.status != 0 {
         bail!("could not create bare repo on {}: {}", peer.name, o.stderr.trim());
     }
+    if peer.is_local() {
+        return Ok(path);
+    }
     Ok(format!("{}:git/{name}.git", crate::ssh::ALIAS))
 }
 
@@ -169,7 +172,7 @@ impl Engine for GitEngine {
                 }
                 let url = g(repo, &["remote", "get-url", "origin"])?.trim().to_string();
                 let local_home = paths::home().to_string_lossy().into_owned();
-                let url = if i_am_hub && url.starts_with(&local_home) {
+                let url = if i_am_hub && url.starts_with(&local_home) && !peer.is_local() {
                     format!("{}:{}", crate::ssh::ALIAS, url.trim_start_matches(&local_home).trim_start_matches('/'))
                 } else {
                     url
@@ -187,10 +190,12 @@ impl Engine for GitEngine {
                     },
                 });
             } else {
-                let mut args = vec!["git-sync-local", rel.as_str()];
+                let mut args = vec!["git-sync-local"];
                 if auto {
                     args.push("--autocommit");
                 }
+                args.push("--");
+                args.push(rel.as_str());
                 let outs: Vec<Outcome> = peer.twin_json(&args)?;
                 if let Some(o) = outs.first() {
                     let s = if o.action == "refused" {

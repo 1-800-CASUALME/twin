@@ -119,12 +119,22 @@ impl Peer {
         ]
     }
 
+    /// True when TWIN_PEER_LOCAL is set: the "peer" is a second home directory on this
+    /// machine and commands run locally with HOME swapped. Used by the integration test.
+    pub fn is_local(&self) -> bool {
+        std::env::var("TWIN_PEER_LOCAL").map(|v| !v.is_empty()).unwrap_or(false)
+    }
+
     /// Run a shell command line on the peer through a login shell so PATH is the user's.
     pub fn sh(&self, script: &str) -> Result<Output> {
         let script = match std::env::var("TWIN_PEER_PATH_PREFIX") {
             Ok(p) if !p.is_empty() => format!("export PATH={}:\"$PATH\"; {}", shell_quote(&p), script),
             _ => script.to_string(),
         };
+        if self.is_local() {
+            let script = format!("export HOME={}; cd \"$HOME\"; {}", shell_quote(&self.home), script);
+            return cmd::run("sh", &["-c", &script], None);
+        }
         let mut a = Self::ssh_base_args();
         a.push("sh".into());
         a.push("-lc".into());
@@ -161,6 +171,11 @@ impl Peer {
     }
 
     fn rsync(&self, src: &str, dst: &str, files_from: &Path) -> Result<()> {
+        if self.is_local() {
+            let strip = |s: &str| s.trim_start_matches(&format!("{ALIAS}:")).to_string();
+            cmd::run_ok("rsync", &["-a", "--files-from", files_from.to_str().unwrap(), &strip(src), &strip(dst)], None)?;
+            return Ok(());
+        }
         let ssh_cmd = format!("ssh -F {} -o BatchMode=yes", shell_quote(&crate::paths::ssh_config().to_string_lossy()));
         cmd::run_ok(
             "rsync",

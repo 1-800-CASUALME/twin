@@ -65,7 +65,7 @@ fn claude_local(home: &str) -> Item {
             });
         }
     }
-    members.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+    members.sort_by_key(|m| std::cmp::Reverse(m.bytes));
     finish_item("claude", "Claude", "sparkles", &root.to_string_lossy(), members)
 }
 

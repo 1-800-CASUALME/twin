@@ -61,13 +61,24 @@ enum Cmd {
     /// Show pairing status
     Status,
     #[command(hide = true)]
-    ClaudeFiles { slug: String },
+    ClaudeFiles {
+        #[arg(allow_hyphen_values = true)]
+        slug: String,
+    },
     #[command(hide = true)]
-    ClaudePrefixHash { slug: String },
+    ClaudePrefixHash {
+        #[arg(allow_hyphen_values = true)]
+        slug: String,
+    },
     #[command(hide = true)]
-    ConflictCopy { path: String, host: String },
+    ConflictCopy {
+        #[arg(allow_hyphen_values = true)]
+        path: String,
+        host: String,
+    },
     #[command(hide = true)]
     GitSyncLocal {
+        #[arg(allow_hyphen_values = true)]
         rel: String,
         #[arg(long)]
         autocommit: bool,

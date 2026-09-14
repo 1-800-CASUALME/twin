@@ -170,7 +170,7 @@ impl Engine for ClaudeEngine {
             let local_dir = root.join(s);
             let peer_dir = format!("{peer_root}/{peer_slug}");
             let local_files = if local_dir.is_dir() { list_files(&local_dir) } else { vec![] };
-            let peer_files: Vec<FileEntry> = peer.twin_json(&["claude-files", &peer_slug])?;
+            let peer_files: Vec<FileEntry> = peer.twin_json(&["claude-files", "--", &peer_slug])?;
             let mut plan = plan(&local_files, &peer_files);
             if !plan.prefix_check.is_empty() {
                 let input: String = plan.prefix_check.iter().map(|(r, n)| format!("{r}\t{n}\n")).collect();
@@ -193,7 +193,7 @@ impl Engine for ClaudeEngine {
             }
             for rel in &plan.conflict_peer {
                 let abs = format!("{peer_dir}/{rel}");
-                let _ = peer.run(&["twin", "conflict-copy", &abs, &peer.name]);
+                let _ = peer.run(&["twin", "conflict-copy", "--", &abs, &peer.name]);
                 conflicts += 1;
                 emitter.emit(Event::Conflict { id: id.into(), path: format!("{s}/{rel}"), kept: format!("{}:{abs}", peer.name) });
             }
@@ -232,7 +232,7 @@ fn write_list(rels: &[String]) -> Result<tempfile::NamedTempFile> {
 }
 
 fn peer_prefix_hashes(peer: &Peer, peer_slug: &str, input: &str) -> Result<HashMap<String, String>> {
-    let script = format!("printf %s {} | twin claude-prefix-hash {}", shell_quote(input), shell_quote(peer_slug));
+    let script = format!("printf %s {} | twin claude-prefix-hash -- {}", shell_quote(input), shell_quote(peer_slug));
     let o = peer.sh(&script)?;
     Ok(o
         .stdout
