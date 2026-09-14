@@ -79,11 +79,16 @@ pub fn browse(timeout: Duration, emitter: &dyn Emitter) -> Result<Vec<Found>> {
         match rx.recv_timeout(remaining) {
             Ok(ServiceEvent::ServiceResolved(info)) => {
                 let get = |k: &str| info.get_property_val_str(k).unwrap_or("").to_string();
-                if get("instance") == me.instance {
+                // Skip ourselves: same instance, or another twin process on this same host.
+                if get("instance") == me.instance || get("host") == me.host {
                     continue;
                 }
                 let addrs = info.get_addresses();
-                let addr = addrs.iter().find(|a| a.is_ipv4()).or_else(|| addrs.iter().next()).map(|a| a.to_string());
+                let addr = addrs
+                    .iter()
+                    .find(|a| matches!(a, std::net::IpAddr::V4(v) if !v.is_loopback() && !v.is_link_local()))
+                    .or_else(|| addrs.iter().find(|a| matches!(a, std::net::IpAddr::V6(v) if !v.is_loopback() && (v.segments()[0] & 0xffc0) != 0xfe80)))
+                    .map(|a| a.to_string());
                 let Some(addr) = addr else { continue };
                 if found.iter().any(|f| f.instance == get("instance")) {
                     continue;
@@ -131,6 +136,7 @@ mod tests {
     fn advertise_then_browse_finds_other_instance() {
         let mut info = local_info();
         info.instance = "test-instance-1".into();
+        info.host = "twin-test-host".into();
         let _adv = advertise(7999, &info).unwrap();
         let found = browse(Duration::from_secs(3), &crate::event::NullEmitter).unwrap();
         assert!(found.iter().any(|f| f.instance == "test-instance-1"));
