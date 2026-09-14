@@ -1,6 +1,6 @@
 # Twin Phase 4: Remaining Engines, Background Sync, Packaging
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Every card in the spec is real: Folders, Dotfiles, History, Terminal join Claude and Git; `twin attach` and `twin schedule` exist; both UIs show the new cards and the schedule toggle; tagged releases publish Linux tarballs, a Mac DMG, and a Homebrew cask.
 

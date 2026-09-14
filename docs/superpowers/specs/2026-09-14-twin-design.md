@@ -1,7 +1,7 @@
 # Twin — design spec
 
 Date: 2026-09-14
-Status: draft for review
+Status: implemented 2026-09-14 (phases 1–4)
 
 ## 1. What Twin is
 
@@ -227,9 +227,11 @@ never deletes user data without leaving a conflict copy.
 
 ### 5.4 Shell history
 
-- atuin on both. `atuin-server` runs on the desktop with the SQLite
-  backend as a systemd user unit, bound to `0.0.0.0:8888` but firewalled
-  to the LAN and Tailscale interfaces. No third-party account.
+- atuin on both. When the desktop's atuin build can run `atuin server`,
+  Twin runs it there with the SQLite backend as a systemd user unit on
+  port 8888. Distro builds sometimes omit the server subcommand; Twin
+  detects that and falls back to the hosted `api.atuin.sh`, which is
+  still end-to-end encrypted, and says so on the History card.
 - Twin registers the account on first sync and copies the encryption key
   to the peer over SSH. Sync item just runs `atuin sync` on both sides;
   when the desktop is off, the laptop queues and catches up later.
