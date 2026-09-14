@@ -9,22 +9,30 @@ on Omarchy.
 
 ## Install
 
-macOS (planned, Phase 4):
+macOS:
 
 ```
-brew install --cask 1-800-casualme/twin/twin
+brew tap 1-800-CASUALME/twin https://github.com/1-800-CASUALME/twin
+brew install --cask twin
 ```
 
-Omarchy / Arch (planned, Phase 4):
+Or download `Twin-macos.dmg` from the latest release, drag Twin to Applications.
+Twin links the `twin` command into `~/.local/bin` on first launch.
+
+Omarchy / Arch:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/1-800-CASUALME/twin/main/install.sh | bash
 ```
 
-From source (works now):
+That installs `twin` and `twin-tui`, adds a floating Twin entry to the launcher, and enables sshd.
+
+From source:
 
 ```
-cd core && cargo install --path twin
+cd core  && cargo install --path twin      # the CLI, both machines
+cd linux && cargo install --path .         # the Omarchy UI
+cd mac   && ./build.sh                     # Twin.app in mac/build/
 ```
 
 ## Use it from the terminal
@@ -41,7 +49,9 @@ On this one:
 twin pair          # shows a 6-digit code on both screens, confirm on both
 twin diagnose      # checks both machines
 twin inventory     # what can be synced, with sizes
-twin sync --all    # or: twin sync claude git
+twin sync --all    # or: twin sync claude git dotfiles history terminal folders
+twin attach        # a persistent tmux session on the other machine
+twin schedule on   # background sync every 15 minutes
 ```
 
 Every command prints one JSON object per line, so the apps and any script can drive it.
@@ -52,10 +62,10 @@ Every command prints one JSON object per line, so the apps and any script can dr
 |---|---|---|
 | Claude sessions | rsync over SSH | project folders mapped between home paths; transcripts: longer file wins; memory: newer wins, loser kept as `.twin-conflict-*` |
 | Git repos | git-sync algorithm | commit (opt-in), fetch, push / fast-forward / rebase; refuses anything unsafe; repos without a remote get a bare repo on the desktop |
-| Dotfiles | chezmoi | Phase 4 |
-| Shell history | atuin, self-hosted on the desktop | Phase 4 |
-| Terminal | tmux-resurrect layouts + `twin attach` over Eternal Terminal | Phase 4 |
-| Folders | rsync, newest wins, conflict copies | Phase 4 |
+| Dotfiles | chezmoi | source repo at `~/.twin/dotfiles` synced peer to peer; Mac-only configs skipped on Linux |
+| Shell history | atuin | server self-hosted on the desktop when its atuin build can run one, else the hosted encrypted sync |
+| Terminal | tmux-resurrect | saved layouts synced with home paths rewritten; `twin attach` opens the shared `main` session over Eternal Terminal or SSH |
+| Folders | rsync | newest wins, loser kept as a `.twin-conflict-*` copy; build dirs ignored |
 
 Twin never deletes a user file, never force-pushes, and never touches `~/.claude` outside `projects/`.
 
@@ -63,10 +73,17 @@ Twin never deletes a user file, never force-pushes, and never touches `~/.claude
 
 ```
 core/     Rust: twin-core library + twin CLI
-mac/      SwiftUI app (Phase 2)
-linux/    Omarchy terminal UI (Phase 3)
+mac/      SwiftUI app, built by mac/build.sh into Twin.app
+linux/    Omarchy terminal UI (ratatui), inherits the active theme
+Casks/    Homebrew cask
 docs/     design spec and implementation plans
 ```
+
+## Release
+
+Tag `vX.Y.Z` and push. CI builds `twin-linux-{x86_64,aarch64}.tar.gz`, `Twin-macos.dmg`,
+and `Twin-macos.zip`, and attaches them to the GitHub release. The Mac build is ad-hoc
+signed; Gatekeeper asks once on first open (right-click, Open).
 
 ## Develop
 

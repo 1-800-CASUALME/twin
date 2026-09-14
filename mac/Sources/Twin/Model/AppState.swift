@@ -20,14 +20,6 @@ enum Step: Int, CaseIterable, Identifiable {
 
 struct PeerStatus: Hashable { var name: String; var addr: String }
 
-/// Cards that are not backed by an engine yet. Shown disabled with a "Soon" badge.
-struct PlaceholderItem: Identifiable { let id: String; let name: String; let icon: String }
-let placeholderItems: [PlaceholderItem] = [
-    .init(id: "dotfiles", name: "Dotfiles", icon: "doc.text"),
-    .init(id: "history", name: "History", icon: "clock.arrow.circlepath"),
-    .init(id: "terminal", name: "Terminal", icon: "terminal"),
-    .init(id: "folders", name: "Folders", icon: "folder"),
-]
 
 @MainActor @Observable
 final class AppState {
@@ -60,6 +52,7 @@ final class AppState {
     var conflicts: [Conflict] = []
     var synced = false
     var syncOK = false
+    var schedule = false
 
     var sortedChecks: [CheckResult] {
         let order = ["local": 0, "pair": 1, "peer": 2]
@@ -105,7 +98,8 @@ final class AppState {
     func loadStatus() async {
         let (events, _) = TwinCore.run(["status"])
         for await ev in events {
-            if case .step(_, let st, let msg) = ev, st == .ok || st == .warn {
+            if case .step("schedule", _, let msg) = ev { schedule = (msg == "on"); continue }
+            if case .step("peer", let st, let msg) = ev, st == .ok || st == .warn {
                 let name = msg.components(separatedBy: " (").first ?? msg
                 let addr = msg.components(separatedBy: "(").dropFirst().first?.components(separatedBy: ")").first ?? ""
                 paired = PeerStatus(name: name, addr: addr)
@@ -270,6 +264,12 @@ final class AppState {
             }
         }
         synced = true; busy = false
+    }
+
+    func setSchedule(_ on: Bool) async {
+        let (events, _) = TwinCore.run(["schedule", on ? "on" : "off"])
+        for await ev in events { if case .error(let m) = ev { error = m } }
+        schedule = on
     }
 
     var summaryLines: [String] {

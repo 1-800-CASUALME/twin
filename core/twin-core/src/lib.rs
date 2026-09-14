@@ -10,5 +10,6 @@ pub mod lock;
 pub mod log;
 pub mod pair;
 pub mod paths;
+pub mod schedule;
 pub mod slug;
 pub mod ssh;

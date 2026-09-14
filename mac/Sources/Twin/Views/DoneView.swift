@@ -2,7 +2,6 @@ import SwiftUI
 
 struct DoneView: View {
     @Environment(AppState.self) private var state
-    @State private var schedule = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -15,8 +14,8 @@ struct DoneView: View {
                 ForEach(state.summaryLines, id: \.self) { Text($0).font(.callout) }
             }
             .foregroundStyle(.secondary)
-            Toggle("Keep in sync every 15 minutes", isOn: $schedule).disabled(true)
-                .help("Arrives with the background engine in Phase 4")
+            Toggle("Keep in sync every 15 minutes", isOn: Binding(get: { state.schedule }, set: { on in Task { await state.setSchedule(on) } }))
+                .toggleStyle(.switch)
             Text("Attach to the other machine from Terminal with  twin attach")
                 .font(.caption).foregroundStyle(.tertiary)
             Spacer()

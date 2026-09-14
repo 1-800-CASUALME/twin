@@ -61,6 +61,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                         _ => {}
                     },
                     (KeyCode::Char('f'), _) if app.step == Step::Diagnose => app.fix_focused(),
+                    (KeyCode::Char('s'), _) if app.step == Step::Done => app.toggle_schedule(),
                     (KeyCode::Char('a'), _) if app.step == Step::Choose => {
                         let on = !app.all_selected();
                         app.select_all(on);

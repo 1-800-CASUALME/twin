@@ -110,7 +110,10 @@ fn hint_bar(f: &mut Frame, app: &App, area: Rect) {
             h.push(("c", "continue"));
         }
         Step::Sync => h.push(("enter", if app.synced { "continue" } else { "sync" })),
-        Step::Done => h.push(("enter", "sync again")),
+        Step::Done => {
+            h.push(("enter", "sync again"));
+            h.push(("s", "schedule"));
+        }
     }
     if app.step != Step::Welcome {
         h.push(("b", "back"));
@@ -322,15 +325,7 @@ fn choose(f: &mut Frame, app: &App, area: Rect) {
         f.render_widget(Paragraph::new(lines), inner);
         y += h;
     }
-    // placeholders
-    let soon = ["dotfiles", "history", "terminal", "folders"];
-    if y + 1 < body.y + body.height {
-        let spans: Vec<Span> = soon
-            .iter()
-            .flat_map(|s| vec![Span::styled(format!(" {} {} ", icons::for_id(s), s), Style::default().fg(MUTED)), Span::styled("soon  ", Style::default().fg(MUTED).add_modifier(Modifier::DIM))])
-            .collect();
-        f.render_widget(Paragraph::new(Line::from(spans)), Rect { x: body.x, y: y + 1, width: body.width, height: 1 });
-    }
+    let _ = y;
 }
 
 fn sync(f: &mut Frame, app: &App, area: Rect) {
@@ -398,6 +393,12 @@ fn done(f: &mut Frame, app: &App, area: Rect) {
             lines.push(Line::from(Span::styled(format!("{}: {}", id, msg), Style::default().fg(MUTED))).alignment(Alignment::Center));
         }
     }
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled(format!("{} ", icons::checkbox(app.schedule)), Style::default().fg(if app.schedule { Color::Green } else { MUTED })),
+        Span::raw("Keep in sync every 15 minutes"),
+        Span::styled("   s toggle", Style::default().fg(MUTED)),
+    ]).alignment(Alignment::Center));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled("Attach to the other machine with:  twin attach", Style::default().fg(MUTED))).alignment(Alignment::Center));
     lines.push(Line::from(""));

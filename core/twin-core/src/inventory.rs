@@ -144,9 +144,62 @@ fn finish_item(id: &str, name: &str, icon: &str, location: &str, members: Vec<Me
     }
 }
 
-pub fn local(_cfg: &Config) -> Vec<Item> {
+fn dotfiles_local() -> Item {
+    let mut members = Vec::new();
+    let managed = crate::engines::dotfiles::managed();
+    let list: Vec<String> = if managed.is_empty() {
+        crate::engines::dotfiles::SEED.iter().map(|s| s.to_string()).filter(|s| paths::home().join(s).is_file()).collect()
+    } else {
+        managed
+    };
+    for rel in list {
+        let p = paths::home().join(&rel);
+        let bytes = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+        members.push(Member { id: rel.clone(), name: rel.clone(), path: p.to_string_lossy().into_owned(), bytes, count: 1, detail: "chezmoi".into(), local: true, peer: false });
+    }
+    finish_item("dotfiles", "Dotfiles", "doc.text", "~/.twin/dotfiles", members)
+}
+
+fn history_local() -> Item {
+    let db = paths::home().join(".local/share/atuin/history.db");
+    let (bytes, n) = if db.is_file() {
+        let b = std::fs::metadata(&db).map(|m| m.len()).unwrap_or(0);
+        let n = cmd::run("atuin", &["stats", "--count", "1"], None).ok().and_then(|o| o.stdout.lines().find(|l| l.contains("Total commands")).and_then(|l| l.split_whitespace().last()?.parse::<u64>().ok())).unwrap_or(0);
+        (b, n)
+    } else {
+        let zh = paths::home().join(".zsh_history");
+        (std::fs::metadata(&zh).map(|m| m.len()).unwrap_or(0), std::fs::read_to_string(&zh).map(|s| s.lines().count() as u64).unwrap_or(0))
+    };
+    let member = Member { id: "shell".into(), name: "Shell history".into(), path: db.to_string_lossy().into_owned(), bytes, count: n, detail: if db.is_file() { "atuin".into() } else { "atuin not set up yet".into() }, local: true, peer: false };
+    finish_item("history", "History", "clock.arrow.circlepath", "~/.local/share/atuin", vec![member])
+}
+
+fn terminal_local() -> Item {
+    let mut members = Vec::new();
+    if let Some(dir) = crate::engines::terminal::resurrect_dir() {
+        let saves = crate::engines::files::list_files(&dir).into_iter().filter(|f| f.rel.starts_with("tmux_resurrect_")).count() as u64;
+        let (bytes, _) = dir_size(&dir);
+        members.push(Member { id: "resurrect".into(), name: "tmux layouts".into(), path: dir.to_string_lossy().into_owned(), bytes, count: saves, detail: format!("{saves} saves"), local: true, peer: false });
+    }
+    finish_item("terminal", "Terminal", "terminal", "~/.local/share/tmux/resurrect", members)
+}
+
+fn folders_local(cfg: &Config) -> Item {
+    let mut members = Vec::new();
+    for rel in crate::engines::folders::folders(cfg) {
+        let p = paths::home().join(&rel);
+        if !p.is_dir() {
+            continue;
+        }
+        let (bytes, files) = dir_size(&p);
+        members.push(Member { id: rel.clone(), name: rel.clone(), path: p.to_string_lossy().into_owned(), bytes, count: files, detail: format!("{files} files"), local: true, peer: false });
+    }
+    finish_item("folders", "Folders", "folder", "~", members)
+}
+
+pub fn local(cfg: &Config) -> Vec<Item> {
     let home = paths::home();
-    vec![claude_local(&home.to_string_lossy()), git_local(&home)]
+    vec![claude_local(&home.to_string_lossy()), git_local(&home), dotfiles_local(), history_local(), terminal_local(), folders_local(cfg)]
 }
 
 pub fn merged(cfg: &Config, emitter: &dyn Emitter) -> Result<Vec<Item>> {
