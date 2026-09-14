@@ -20,6 +20,8 @@ pub struct Config {
     #[serde(default)]
     pub selection: Vec<String>,
     #[serde(default)]
+    pub members: Vec<String>,
+    #[serde(default)]
     pub git_autocommit: Vec<String>,
     #[serde(default)]
     pub folders: Vec<String>,

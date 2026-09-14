@@ -60,6 +60,16 @@ enum Cmd {
     },
     /// Show pairing status
     Status,
+    /// Save which items and members to sync by default
+    Select {
+        items: Vec<String>,
+        /// item:member keys to restrict to (repeatable)
+        #[arg(long)]
+        member: Vec<String>,
+        /// home-relative repo paths that may be auto-committed (repeatable)
+        #[arg(long)]
+        autocommit: Vec<String>,
+    },
     #[command(hide = true)]
     ClaudeFiles {
         #[arg(allow_hyphen_values = true)]
@@ -188,7 +198,8 @@ fn real_main(em: &dyn Emitter) -> Result<()> {
                     em.emit(Event::Step { id: id.clone(), state: State::Skipped, msg: "unknown item".into() });
                     continue;
                 };
-                let members: Vec<String> = member
+                let member_src = if member.is_empty() { &cfg.members } else { &member };
+                let members: Vec<String> = member_src
                     .iter()
                     .filter_map(|m| m.strip_prefix(&format!("{id}:")).map(|s| s.to_string()))
                     .collect();
@@ -212,6 +223,15 @@ fn real_main(em: &dyn Emitter) -> Result<()> {
                 }
                 None => em.emit(Event::Step { id: "peer".into(), state: State::Fail, msg: "not paired".into() }),
             }
+            em.emit(Event::Done { ok: true });
+        }
+        Cmd::Select { items, member, autocommit } => {
+            let mut cfg = Config::load()?;
+            cfg.selection = items;
+            cfg.members = member;
+            cfg.git_autocommit = autocommit;
+            cfg.save()?;
+            em.emit(Event::Step { id: "select".into(), state: State::Ok, msg: format!("{} items saved", cfg.selection.len()) });
             em.emit(Event::Done { ok: true });
         }
         Cmd::ClaudeFiles { slug } => {
