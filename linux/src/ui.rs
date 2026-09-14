@@ -241,14 +241,17 @@ fn grid(area: Rect, cols: u16, card_h: u16) -> Vec<Rect> {
 
 fn diagnose(f: &mut Frame, app: &App, area: Rect) {
     let [top, body] = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).areas(area);
-    let title = Line::from(vec![
-        Span::styled("Both machines", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw("   "),
-        Span::styled(
-            if app.busy { format!("{} checking…", icons::spinner(app.tick)) } else if app.diagnosed { "done".into() } else { "press enter to check".into() },
-            Style::default().fg(MUTED),
-        ),
-    ]);
+    let blocking: Vec<String> = app.sorted_checks().iter().filter(|c| c.state == State::Fail).map(|c| format!("{} ({})", c.name, if c.side == "local" { "here" } else if c.side == "peer" { "other machine" } else { "pair" })).collect();
+    let status = if app.busy {
+        Span::styled(format!("{} checking…", icons::spinner(app.tick)), Style::default().fg(MUTED))
+    } else if !blocking.is_empty() {
+        Span::styled(format!("{} blocked by: {}", icons::cross(), blocking.join(", ")), Style::default().fg(Color::Red))
+    } else if app.diagnosed {
+        Span::styled(format!("{} all good, press c to continue", icons::check()), Style::default().fg(Color::Green))
+    } else {
+        Span::styled("press enter to check", Style::default().fg(MUTED))
+    };
+    let title = Line::from(vec![Span::styled("Both machines", Style::default().add_modifier(Modifier::BOLD)), Span::raw("   "), status]);
     f.render_widget(Paragraph::new(title), top);
     let checks = app.sorted_checks();
     let cols = (body.width / 26).clamp(1, 4);

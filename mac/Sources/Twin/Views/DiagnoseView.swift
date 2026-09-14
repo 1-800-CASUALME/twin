@@ -13,7 +13,16 @@ struct DiagnoseView: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack {
-                Text("Both machines").font(.title2.weight(.semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Both machines").font(.title2.weight(.semibold))
+                    let blocking = state.sortedChecks.filter { $0.state == .fail }
+                    if !blocking.isEmpty {
+                        Text("Blocked by: " + blocking.map { "\($0.name) (\($0.side == "local" ? "this Mac" : $0.side == "peer" ? "other machine" : "pair"))" }.joined(separator: ", "))
+                            .font(.caption).foregroundStyle(.red)
+                    } else if state.diagnosed && !state.busy {
+                        Text("All good").font(.caption).foregroundStyle(.green)
+                    }
+                }
                 Spacer()
                 BigButton(title: state.diagnosed ? "Check again" : "Check", symbol: "stethoscope", busy: state.busy) {
                     Task { await state.diagnose() }

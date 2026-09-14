@@ -179,14 +179,21 @@ pub fn run_all(cfg: &Config, emitter: &dyn Emitter) -> Result<Vec<CheckResult>> 
                             }
                         }
                     }
-                    Err(e) => emit_push(&mut all, emitter, CheckResult {
-                        id: "twin".into(),
-                        name: "Twin on peer".into(),
-                        side: "peer".into(),
-                        state: State::Fail,
-                        msg: e.to_string(),
-                        fixable: false,
-                    }),
+                    Err(e) => {
+                        let missing = e.to_string().contains("not found") || e.to_string().contains("command not found");
+                        emit_push(&mut all, emitter, CheckResult {
+                            id: "twin".into(),
+                            name: "Twin on peer".into(),
+                            side: "peer".into(),
+                            state: State::Fail,
+                            msg: if missing {
+                                format!("twin is not on {}'s PATH for SSH sessions: install Twin there (it links ~/.local/bin/twin)", peer.name)
+                            } else {
+                                format!("could not run twin on {}: {}", peer.name, e)
+                            },
+                            fixable: false,
+                        })
+                    }
                 }
             }
         }

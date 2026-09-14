@@ -127,9 +127,15 @@ impl Peer {
 
     /// Run a shell command line on the peer through a login shell so PATH is the user's.
     pub fn sh(&self, script: &str) -> Result<Output> {
+        // Non-interactive login shells (sh -lc over ssh) skip .zshrc/.bashrc, so the user's
+        // PATH additions are missing. Put the usual install locations first.
+        let script = format!(
+            "export PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:$PATH\"; {}",
+            script
+        );
         let script = match std::env::var("TWIN_PEER_PATH_PREFIX") {
             Ok(p) if !p.is_empty() => format!("export PATH={}:\"$PATH\"; {}", shell_quote(&p), script),
-            _ => script.to_string(),
+            _ => script,
         };
         if self.is_local() {
             let script = format!("export HOME={}; cd \"$HOME\"; {}", shell_quote(&self.home), script);

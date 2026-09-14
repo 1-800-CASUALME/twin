@@ -115,9 +115,13 @@ pub fn sync_repo(repo: &Path, autocommit: bool, host: &str) -> Result<Outcome> {
 }
 
 /// Create (if needed) a bare repo on the hub at ~/git/<name>.git. Returns the remote URL usable from the non-hub side.
-pub fn ensure_bare_on_hub(peer: &Peer, name: &str) -> Result<String> {
+pub fn ensure_bare_on_hub(peer: &Peer, name: &str, branch: &str) -> Result<String> {
     let path = format!("{}/git/{name}.git", peer.home.trim_end_matches('/'));
-    let script = format!("mkdir -p ~/git && {{ [ -d {p} ] || git init -q --bare {p}; }}", p = shell_quote(&path));
+    let script = format!(
+        "mkdir -p ~/git && {{ [ -d {p} ] || git init -q --bare {p}; }} && git --git-dir={p} symbolic-ref HEAD refs/heads/{b}",
+        p = shell_quote(&path),
+        b = branch
+    );
     let o = peer.sh(&script)?;
     if o.status != 0 {
         bail!("could not create bare repo on {}: {}", peer.name, o.stderr.trim());
@@ -128,13 +132,14 @@ pub fn ensure_bare_on_hub(peer: &Peer, name: &str) -> Result<String> {
     Ok(format!("{}:git/{name}.git", crate::ssh::ALIAS))
 }
 
-pub fn ensure_bare_local(name: &str) -> Result<String> {
+pub fn ensure_bare_local(name: &str, branch: &str) -> Result<String> {
     let dir = paths::home().join("git");
     std::fs::create_dir_all(&dir)?;
     let p = dir.join(format!("{name}.git"));
     if !p.is_dir() {
         run_ok("git", &["init", "-q", "--bare", p.to_str().unwrap()], None)?;
     }
+    run_ok("git", &["--git-dir", p.to_str().unwrap(), "symbolic-ref", "HEAD", &format!("refs/heads/{branch}")], None)?;
     Ok(p.to_string_lossy().into_owned())
 }
 
@@ -161,7 +166,7 @@ impl Engine for GitEngine {
             let auto = cfg.git_autocommit.contains(&rel);
             let st = state(repo)?;
             if !st.has_remote {
-                let url = if i_am_hub { ensure_bare_local(&name)? } else { ensure_bare_on_hub(peer, &name)? };
+                let url = if i_am_hub { ensure_bare_local(&name, &st.branch)? } else { ensure_bare_on_hub(peer, &name, &st.branch)? };
                 g(repo, &["remote", "add", "origin", &url])?;
             }
             let out = sync_repo(repo, auto, &host)?;
@@ -187,7 +192,8 @@ impl Engine for GitEngine {
                     url
                 };
                 let parent = Path::new(&peer_repo).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
-                let script = format!("mkdir -p {} && git clone -q {} {}", shell_quote(&parent), shell_quote(&url), shell_quote(&peer_repo));
+                let branch = state(repo).map(|s| s.branch).unwrap_or_else(|_| "main".into());
+                let script = format!("mkdir -p {} && git clone -q --branch {} {} {}", shell_quote(&parent), shell_quote(&branch), shell_quote(&url), shell_quote(&peer_repo));
                 let o = peer.sh(&script)?;
                 emitter.emit(Event::Step {
                     id: format!("{sub} @{}", peer.name),
