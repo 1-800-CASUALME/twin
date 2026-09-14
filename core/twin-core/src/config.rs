@@ -76,6 +76,7 @@ mod tests {
             home: "/home/asim".into(),
             addr: "192.168.1.5".into(),
             hub: true,
+            fp: "abc".into(),
         });
         c.selection = vec!["claude".into(), "git".into()];
         c.save_to(&p).unwrap();
