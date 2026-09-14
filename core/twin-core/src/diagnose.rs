@@ -30,6 +30,8 @@ pub const CHECKS: &[CheckDef] = &[
     CheckDef { id: "et", name: "Eternal Terminal", icon: "bolt.horizontal", brew: Some("MisterTea/et/et"), pacman: Some("eternalterminal") },
     CheckDef { id: "atuin", name: "atuin", icon: "clock.arrow.circlepath", brew: Some("atuin"), pacman: Some("atuin") },
     CheckDef { id: "chezmoi", name: "chezmoi", icon: "doc.text", brew: Some("chezmoi"), pacman: Some("chezmoi") },
+    CheckDef { id: "tmux-resurrect", name: "tmux layouts", icon: "rectangle.split.2x2", brew: None, pacman: None },
+    CheckDef { id: "atuin-server", name: "atuin server", icon: "server.rack", brew: None, pacman: None },
     CheckDef { id: "claude", name: "Claude Code", icon: "sparkles", brew: None, pacman: None },
     CheckDef { id: "disk", name: "Disk space", icon: "internaldrive", brew: None, pacman: None },
     CheckDef { id: "conflicts", name: "Conflicts", icon: "exclamationmark.triangle", brew: None, pacman: None },
@@ -91,6 +93,26 @@ pub fn run_local(emitter: &dyn Emitter) -> Vec<CheckResult> {
         msg: if sshd_ok { "sshd available".into() } else { "sshd missing".into() },
         fixable: !sshd_ok,
     });
+    let rs = crate::engines::terminal::resurrect_dir().is_some();
+    emit_push(&mut out, emitter, CheckResult {
+        id: "tmux-resurrect".into(),
+        name: "tmux layouts".into(),
+        side: side.into(),
+        state: if rs { State::Ok } else { State::Warn },
+        msg: if rs { "tmux-resurrect saves found".into() } else { "tmux-resurrect not set up (optional)".into() },
+        fixable: false,
+    });
+    if cfg!(target_os = "linux") {
+        let active = cmd::run("systemctl", &["--user", "is-active", "atuin-server.service"], None).map(|o| o.status == 0).unwrap_or(false);
+        emit_push(&mut out, emitter, CheckResult {
+            id: "atuin-server".into(),
+            name: "atuin server".into(),
+            side: side.into(),
+            state: if active { State::Ok } else { State::Warn },
+            msg: if active { "running".into() } else { "not running yet (History sync sets it up)".into() },
+            fixable: false,
+        });
+    }
     let cl = which("claude") && crate::paths::claude_projects_dir().is_dir();
     emit_push(&mut out, emitter, CheckResult {
         id: "claude".into(),

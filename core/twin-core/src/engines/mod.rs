@@ -4,7 +4,12 @@ use crate::ssh::Peer;
 use anyhow::Result;
 
 pub mod claude;
+pub mod dotfiles;
+pub mod files;
+pub mod folders;
 pub mod git;
+pub mod history;
+pub mod terminal;
 
 pub trait Engine: Send + Sync {
     fn id(&self) -> &'static str;
@@ -13,7 +18,14 @@ pub trait Engine: Send + Sync {
 }
 
 pub fn all() -> Vec<Box<dyn Engine>> {
-    vec![Box::new(claude::ClaudeEngine), Box::new(git::GitEngine)]
+    vec![
+        Box::new(claude::ClaudeEngine),
+        Box::new(git::GitEngine),
+        Box::new(dotfiles::DotfilesEngine),
+        Box::new(history::HistoryEngine),
+        Box::new(terminal::TerminalEngine),
+        Box::new(folders::FoldersEngine),
+    ]
 }
 pub fn by_id(id: &str) -> Option<Box<dyn Engine>> {
     all().into_iter().find(|e| e.id() == id)

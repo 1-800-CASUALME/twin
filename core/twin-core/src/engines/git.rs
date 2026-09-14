@@ -34,13 +34,19 @@ fn g_ok(repo: &Path, args: &[&str]) -> bool {
 }
 
 pub fn state(repo: &Path) -> Result<RepoState> {
-    let branch = g(repo, &["rev-parse", "--abbrev-ref", "HEAD"])?.trim().to_string();
+    let has_head = g_ok(repo, &["rev-parse", "--verify", "-q", "HEAD"]);
+    let branch = if has_head {
+        g(repo, &["rev-parse", "--abbrev-ref", "HEAD"])?.trim().to_string()
+    } else {
+        // unborn branch (no commits yet)
+        g(repo, &["symbolic-ref", "--short", "HEAD"]).map(|b| b.trim().to_string()).unwrap_or_else(|_| "main".into())
+    };
     let detached = branch == "HEAD";
     let gd = repo.join(".git");
     let in_progress = gd.join("MERGE_HEAD").exists() || gd.join("rebase-merge").exists() || gd.join("rebase-apply").exists();
     let dirty = !g(repo, &["status", "--porcelain"])?.trim().is_empty();
     let has_remote = g_ok(repo, &["remote", "get-url", "origin"]);
-    let has_upstream = has_remote && !detached && g_ok(repo, &["rev-parse", "--verify", "-q", &format!("origin/{branch}")]);
+    let has_upstream = has_head && has_remote && !detached && g_ok(repo, &["rev-parse", "--verify", "-q", &format!("origin/{branch}")]);
     let (ahead, behind) = if has_upstream {
         let s = g(repo, &["rev-list", "--left-right", "--count", &format!("HEAD...origin/{branch}")])?;
         let mut it = s.split_whitespace().map(|x| x.parse::<u64>().unwrap_or(0));
@@ -70,6 +76,9 @@ pub fn sync_repo(repo: &Path, autocommit: bool, host: &str) -> Result<Outcome> {
         }
         g(repo, &["add", "-A"])?;
         g(repo, &["commit", "-qm", &format!("twin: {host} {}", chrono::Local::now().format("%Y-%m-%d %H:%M"))])?;
+    }
+    if !g_ok(repo, &["rev-parse", "--verify", "-q", "HEAD"]) {
+        return Ok(Outcome { action: "clean".into(), msg: "nothing to sync yet".into() });
     }
     if !st.has_remote {
         return Ok(Outcome { action: "no-remote".into(), msg: "no origin remote".into() });
@@ -274,6 +283,16 @@ mod tests {
         let o = sync_repo(&b, true, "h").unwrap();
         assert_eq!(o.action, "refused");
         assert!(!state(&b).unwrap().in_progress);
+    }
+    #[test]
+    fn unborn_repo_commits_then_reports() {
+        let d = tempfile::tempdir().unwrap();
+        sh(d.path(), "git init -q r && cd r && git config user.email t@t && git config user.name t");
+        let r = d.path().join("r");
+        assert_eq!(sync_repo(&r, true, "h").unwrap().action, "clean");
+        std::fs::write(r.join("f"), "x").unwrap();
+        assert_eq!(sync_repo(&r, true, "h").unwrap().action, "no-remote");
+        assert!(g_ok(&r, &["rev-parse", "--verify", "-q", "HEAD"]));
     }
     #[test]
     fn no_remote_reports_no_remote() {

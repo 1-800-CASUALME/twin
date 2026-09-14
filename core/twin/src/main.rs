@@ -63,6 +63,10 @@ enum Cmd {
     },
     /// Show pairing status
     Status,
+    /// Open a persistent terminal on the other machine (tmux session "main")
+    Attach,
+    /// Background sync every 15 minutes: on, off, or status
+    Schedule { mode: String },
     /// Save which items and members to sync by default
     Select {
         items: Vec<String>,
@@ -73,6 +77,32 @@ enum Cmd {
         #[arg(long)]
         autocommit: Vec<String>,
     },
+    #[command(hide = true)]
+    ListFiles {
+        #[arg(long)]
+        ignore: Vec<String>,
+        #[arg(allow_hyphen_values = true)]
+        dir: String,
+    },
+    #[command(hide = true)]
+    PrefixHash {
+        #[arg(allow_hyphen_values = true)]
+        dir: String,
+    },
+    #[command(hide = true)]
+    LocalizeResurrect {
+        #[arg(allow_hyphen_values = true)]
+        peer_home: String,
+    },
+    #[command(hide = true)]
+    AtuinServerSetup,
+    #[command(hide = true)]
+    AtuinClientConfig {
+        #[arg(allow_hyphen_values = true)]
+        sync_address: String,
+    },
+    #[command(hide = true)]
+    AtuinLogin,
     #[command(hide = true)]
     ClaudeFiles {
         #[arg(allow_hyphen_values = true)]
@@ -232,6 +262,7 @@ fn real_main(em: &dyn Emitter) -> Result<()> {
                         state: if reach { State::Ok } else { State::Warn },
                         msg: format!("{} ({}) {}", p.name, p.addr, if reach { "reachable" } else { "unreachable" }),
                     });
+                    em.emit(Event::Step { id: "schedule".into(), state: if cfg.schedule { State::Ok } else { State::Skipped }, msg: if cfg.schedule { "on".into() } else { "off".into() } });
                 }
                 None => em.emit(Event::Step { id: "peer".into(), state: State::Fail, msg: "not paired".into() }),
             }
@@ -245,6 +276,65 @@ fn real_main(em: &dyn Emitter) -> Result<()> {
             cfg.save()?;
             em.emit(Event::Step { id: "select".into(), state: State::Ok, msg: format!("{} items saved", cfg.selection.len()) });
             em.emit(Event::Done { ok: true });
+        }
+        Cmd::Attach => {
+            let cfg = Config::load()?;
+            let peer = Peer::new(&cfg)?;
+            let ssh_cfg = twin_core::paths::ssh_config();
+            let status = if cmd::which("et") {
+                std::process::Command::new("et").args([twin_core::ssh::ALIAS, "-c", "tmux new -A -s main"]).status()
+            } else {
+                std::process::Command::new("ssh").args(["-F", ssh_cfg.to_str().unwrap(), "-t", twin_core::ssh::ALIAS, "tmux", "new", "-A", "-s", "main"]).status()
+            }?;
+            let _ = peer;
+            std::process::exit(status.code().unwrap_or(1));
+        }
+        Cmd::Schedule { mode } => {
+            let msg = match mode.as_str() {
+                "on" => twin_core::schedule::on()?,
+                "off" => twin_core::schedule::off()?,
+                _ => if twin_core::schedule::is_on() { "on".into() } else { "off".into() },
+            };
+            em.emit(Event::Step { id: "schedule".into(), state: State::Ok, msg });
+            em.emit(Event::Done { ok: true });
+        }
+        Cmd::ListFiles { ignore, dir } => {
+            let root = std::path::Path::new(&dir);
+            if root.is_dir() {
+                let ig: Vec<&str> = ignore.iter().map(|s| s.as_str()).collect();
+                for f in engines::files::list_files_ignoring(root, &ig) {
+                    println!("{}", serde_json::to_string(&f)?);
+                }
+            }
+        }
+        Cmd::PrefixHash { dir } => {
+            let root = std::path::Path::new(&dir);
+            let mut input = String::new();
+            std::io::stdin().read_to_string(&mut input)?;
+            for line in input.lines() {
+                let mut it = line.splitn(2, '\t');
+                let (Some(rel), Some(n)) = (it.next(), it.next().and_then(|n| n.trim().parse::<u64>().ok())) else { continue };
+                if let Ok(h) = engines::files::prefix_hash(&root.join(rel), n) {
+                    println!("{rel}\t{h}");
+                }
+            }
+        }
+        Cmd::LocalizeResurrect { peer_home } => {
+            if let Some(dir) = engines::terminal::resurrect_dir() {
+                let n = engines::terminal::localize(&dir, &peer_home)?;
+                println!("{n}");
+            }
+        }
+        Cmd::AtuinServerSetup => {
+            println!("{}", engines::history::server_setup()?);
+        }
+        Cmd::AtuinClientConfig { sync_address } => {
+            engines::history::client_config(&sync_address)?;
+        }
+        Cmd::AtuinLogin => {
+            let mut input = String::new();
+            std::io::stdin().read_to_string(&mut input)?;
+            engines::history::login_from_json(&input)?;
         }
         Cmd::ClaudeFiles { slug } => {
             let root = twin_core::paths::claude_projects_dir().join(slug);

@@ -1,0 +1,43 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  linux:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cd core && cargo build --release -p twin
+      - run: cd linux && cargo build --release
+      - run: |
+          mkdir -p out && cp core/target/release/twin linux/target/release/twin-tui out/
+          tar -C out -czf twin-linux-${{ matrix.arch }}.tar.gz twin twin-tui
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: twin-linux-${{ matrix.arch }}.tar.gz
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cd mac && ./build.sh
+      - run: |
+          cd mac/build && ditto -c -k --keepParent Twin.app ../../Twin-macos.zip
+          hdiutil create -volname Twin -srcfolder Twin.app -ov -format UDZO ../../Twin-macos.dmg
+          cd ../.. && shasum -a 256 Twin-macos.dmg | tee Twin-macos.dmg.sha256
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Twin-macos.zip
+            Twin-macos.dmg
+            Twin-macos.dmg.sha256

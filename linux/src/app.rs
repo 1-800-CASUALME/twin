@@ -87,6 +87,7 @@ pub struct App {
     pub conflicts: Vec<Conflict>,
     pub synced: bool,
     pub sync_ok: bool,
+    pub schedule: bool,
     pub quit: bool,
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
@@ -117,6 +118,7 @@ impl App {
             conflicts: vec![],
             synced: false,
             sync_ok: false,
+            schedule: twin_core::schedule::is_on(),
             quit: false,
             tx,
             rx,
@@ -366,6 +368,14 @@ impl App {
                 }
             }
         });
+    }
+
+    pub fn toggle_schedule(&mut self) {
+        let r = if self.schedule { twin_core::schedule::off() } else { twin_core::schedule::on() };
+        match r {
+            Ok(_) => self.schedule = !self.schedule,
+            Err(e) => self.error = Some(e.to_string()),
+        }
     }
 
     pub fn can_continue(&self) -> bool {

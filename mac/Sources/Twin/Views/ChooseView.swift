@@ -18,15 +18,6 @@ struct ChooseView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                         ForEach(state.items) { item in ItemCard(item: item) }
-                        ForEach(placeholderItems) { p in
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack { SymbolIcon(name: p.icon, size: 26); Spacer(); Text("Soon").font(.caption2).foregroundStyle(.secondary) }
-                                Text(p.name).font(.headline)
-                                Text("Phase 4").font(.caption).foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .card(disabled: true)
-                        }
                     }
                 }
             }
